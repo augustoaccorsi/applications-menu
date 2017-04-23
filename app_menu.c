@@ -137,9 +137,10 @@ char * get_process_status(pid_t process_id) {
   } else if (return_pid == process_id) {
     return "finalizado";
   }
+  return "";
 }
 
-void show_all_process(int *browser_pid, int *text_pid, int *terminal_pid) {
+void show_all_process(int browser_pid, int text_pid, int terminal_pid) {
 	int count = 0;
 	char choice = 0;
 	int break_loop = 0;
@@ -155,16 +156,16 @@ void show_all_process(int *browser_pid, int *text_pid, int *terminal_pid) {
 
 		printf("Processos em execução:\n\n");
 
-		if (strcmp(get_process_status(*browser_pid),"executando") == 0) {
-			printf("1. Web Browser, pid: %d\n",*browser_pid);
+		if (strcmp(get_process_status(browser_pid),"executando") == 0) {
+			printf("1. Web Browser, pid: %d\n",browser_pid);
 			count++;
 		}
-		if (strcmp(get_process_status(*text_pid),"executando") == 0) {
-			printf("2. Text Editor, pid: %d\n",*text_pid);
+		if (strcmp(get_process_status(text_pid),"executando") == 0) {
+			printf("2. Text Editor, pid: %d\n",text_pid);
 			count++;
 		}
-		if (strcmp(get_process_status(*terminal_pid),"executando") == 0) {
-			printf("3. Terminal, pid: %d\n",*terminal_pid);
+		if (strcmp(get_process_status(terminal_pid),"executando") == 0) {
+			printf("3. Terminal, pid: %d\n",terminal_pid);
 			count++;
 		}
 
@@ -180,19 +181,19 @@ void show_all_process(int *browser_pid, int *text_pid, int *terminal_pid) {
 
 			switch (choice) {
 				case 49: //web browser
-					if(kill(*browser_pid, SIGTERM)==-1){
+					if(kill(browser_pid, SIGTERM)==-1){
 		        	    perror("erro no kill");
 		        	}
 		        	break_loop = 1;
 		          break;
 		        case 50: // text editor
-		        	if(kill(*text_pid, SIGTERM)==-1){
+		        	if(kill(text_pid, SIGTERM)==-1){
 		        		perror("erro no kill");
 		        	}
 		        	break_loop = 1;
 		          break;
 		        case 51: // terminal
-		        	if(kill(*terminal_pid, SIGTERM)==-1){
+		        	if(kill(terminal_pid, SIGTERM)==-1){
 		        		perror("erro no kill");
 		        	}
 		        	break_loop = 1;
