@@ -1,3 +1,5 @@
+#define _POSIX_SOURCE
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <locale.h>
@@ -5,41 +7,38 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <string.h>
+#include <signal.h>
 
 pid_t call_web_browser(char * URL);
+pid_t call_text_editor(char * txt_name);
 pid_t call_terminal();
 char * get_process_status(pid_t pid);
 void show_all_process();
 void init_sigaction(struct sigaction* conf_sinal);
-void sinal_chegou(int signum, siginfo_t* info, void* vp);
+void sinal_chegou(int signum);
+
+struct sigaction conf_sinal;
 
 #define clear() printf("\033[H\033[J")
+
+pid_t terminal_pid = NULL, text_pid = NULL, browser_pid = NULL;
+char * status_browser  = "NULL";
+char * status_editor   = "NULL";
+char * status_terminal = "NULL";
 
 int main(void) {
   setlocale(LC_ALL, "PORTUGUESE");
   char choice = 0;
   char URL[50];
   char txt_name[50];
-  char * status_browser  = "NULL";
-  char * status_editor   = "NULL";
-  char * status_terminal = "NULL";
-  pid_t terminal_pid = NULL, text_pid = NULL, browser_pid = NULL;
-  struct sigaction conf_sinal;
 
   init_sigaction(&conf_sinal);
-  conf_sinal.sa_handler = &sinal_chegou;
+  sigaction(SIGINT, &conf_sinal, NULL);
+  sigaction(SIGCHLD, &conf_sinal, NULL);
 
   while (1) {
     clear();
-    if(browser_pid != NULL){
-    	status_browser = get_process_status(browser_pid);
-    }
-    if(text_pid != NULL){
-    	status_editor = get_process_status(text_pid);
-    }
-    if(terminal_pid != NULL){
-    	status_terminal = get_process_status(terminal_pid);
-    }
+
     printf("<<<< Applications Menu >>>\n");
     printf("1) Web Browser                        (%s, pid=%d)\n", status_browser, browser_pid);
     printf("2) Text Editor                        (%s, pid=%d)\n", status_editor, text_pid);
@@ -52,8 +51,6 @@ int main(void) {
 
     scanf("%c", &choice);
 
-    printf("escolhido: %c\n", choice);
-
     switch (choice) {
       case 49:
         printf("Opção 1 selecionada: Web Browser\n\n");
@@ -62,28 +59,23 @@ int main(void) {
         browser_pid = call_web_browser(URL);
         status_browser = get_process_status(browser_pid);
         break;
-      case 50: // text editor
-		printf("Opção 2 selecionada: Text Editor\n\n");
-		printf("Digite o nome do arquivo: ");
-		scanf("%s", txt_name);
-		text_pid = call_text_editor(txt_name);
-		status_editor = get_process_status(text_pid);
-		break;
+      case 50:
+    	printf("Opção 2 selecionada: Text Editor\n\n");
+    	printf("Digite o nome do arquivo: ");
+    	scanf("%s", txt_name);
+    	text_pid = call_text_editor(txt_name);
+    	status_editor = get_process_status(text_pid);
+    	break;
       case 51: // terminal
-          printf("Opção 3 selecionada: Terminal\n\n");
-          terminal_pid = call_terminal(URL);
-          status_terminal = get_process_status(terminal_pid);
-          break;
+        printf("Opção 3 selecionada: Terminal\n\n");
+        terminal_pid = call_terminal(URL);
+        status_terminal = get_process_status(terminal_pid);
+        break;
       case 52: // finalizar processo
-    	  show_all_process(browser_pid, text_pid, terminal_pid);
+    	show_all_process(&browser_pid, &text_pid, &terminal_pid);
         break;
       case 53: // quit
         exit(EXIT_FAILURE);
-      case 54: // fazer o ctrl + c funcionar aqui
-        status_browser = get_process_status(browser_pid);
-        status_editor = get_process_status(text_pid);
-        status_terminal = get_process_status(terminal_pid);
-        break;
     }
   }
 }
@@ -128,8 +120,8 @@ pid_t call_terminal() {
 }
 
 char * get_process_status(pid_t process_id) {
-  int status = 0;
-  pid_t return_pid = waitpid(process_id, & status, WNOHANG); /* WNOHANG def'd in wait.h */
+  int status;
+  pid_t return_pid = waitpid(process_id, &status, WNOHANG); /* WNOHANG def'd in wait.h */
   if (return_pid == -1) {
     return "error";
   } else if (return_pid == 0) {
@@ -137,18 +129,15 @@ char * get_process_status(pid_t process_id) {
   } else if (return_pid == process_id) {
     return "finalizado";
   }
-  return "";
 }
 
-void show_all_process(int browser_pid, int text_pid, int terminal_pid) {
+void show_all_process(int *browser_pid, int *text_pid, int *terminal_pid) {
 	int count = 0;
 	char choice = 0;
 	int break_loop = 0;
-
-	struct sigaction conf_sinal;
-
-	init_sigaction(&conf_sinal);
-	conf_sinal.sa_handler = &sinal_chegou;
+	int brow = 0;
+	int ter = 0;
+	int edit = 0;
 
 	clear();
 
@@ -156,17 +145,20 @@ void show_all_process(int browser_pid, int text_pid, int terminal_pid) {
 
 		printf("Processos em execução:\n\n");
 
-		if (strcmp(get_process_status(browser_pid),"executando") == 0) {
-			printf("1. Web Browser, pid: %d\n",browser_pid);
+		if (strcmp(get_process_status(*browser_pid),"executando") == 0 && *browser_pid != 0) {
+			printf("1. Web Browser, pid: %d\n",*browser_pid);
 			count++;
+			brow = 1;
 		}
-		if (strcmp(get_process_status(text_pid),"executando") == 0) {
-			printf("2. Text Editor, pid: %d\n",text_pid);
+		if (strcmp(get_process_status(*text_pid),"executando") == 0 && *text_pid != 0) {
+			printf("2. Text Editor, pid: %d\n",*text_pid);
 			count++;
+			edit = 1;
 		}
-		if (strcmp(get_process_status(terminal_pid),"executando") == 0) {
-			printf("3. Terminal, pid: %d\n",terminal_pid);
+		if (strcmp(get_process_status(*terminal_pid),"executando") == 0 && *terminal_pid != 0) {
+			printf("3. Terminal, pid: %d\n",*terminal_pid);
 			count++;
+			ter = 1;
 		}
 
 		if(count == 0){
@@ -181,47 +173,98 @@ void show_all_process(int browser_pid, int text_pid, int terminal_pid) {
 
 			switch (choice) {
 				case 49: //web browser
-					if(kill(browser_pid, SIGTERM)==-1){
-		        	    perror("erro no kill");
-		        	}
-		        	break_loop = 1;
+					if(brow != 0){
+						status_browser = kill(*browser_pid, SIGTERM);
+						if(status_browser == -1){
+							perror("erro no kill");
+						}
+						break_loop = 1;
+					}
 		          break;
 		        case 50: // text editor
-		        	if(kill(text_pid, SIGTERM)==-1){
+		        	if(edit != 0){
+		        	status_editor = kill(*text_pid, SIGTERM);
+		        	if(status_editor == -1){
 		        		perror("erro no kill");
 		        	}
 		        	break_loop = 1;
+		        	}
 		          break;
 		        case 51: // terminal
-		        	if(kill(terminal_pid, SIGTERM)==-1){
+		        	if(ter != 0){
+		        	status_terminal = kill(*terminal_pid, SIGTERM);
+		        	if(status_terminal == -1){
 		        		perror("erro no kill");
 		        	}
 		        	break_loop = 1;
+		        	}
 		          break;
 			}
-
 			clear();
 		}
 	}
 }
 
-  void init_sigaction(struct sigaction* p_conf_sinal){
-  	memset(p_conf_sinal, 0, sizeof(struct sigaction));
-  	p_conf_sinal->sa_flags = 0;
-  	p_conf_sinal->sa_restorer = NULL;
-  	sigemptyset(&p_conf_sinal->sa_mask);
-  	p_conf_sinal->sa_handler = NULL;
-  }
+void init_sigaction(struct sigaction* p_conf_sinal){
+	memset(p_conf_sinal, 0, sizeof(&p_conf_sinal));
+	sigemptyset(&p_conf_sinal->sa_mask);
+	p_conf_sinal->sa_handler = sinal_chegou;
+}
 
-  void sinal_chegou(int signum, siginfo_t* info, void* vp){
-  	int status = 0;
-  	int retstatus = 0;
+void sinal_chegou(int signum){
+	pid_t pid;
+	int status;
+	int retstatus;
 
-  	if(signum == SIGCHLD){
-  		alarm(0);
-  		waitpid(info->si_pid, &status, WNOHANG);
-  		retstatus = WEXITSTATUS(status);
-  		printf("%d", retstatus);
-  		sleep(5);
-  	}
-  }
+	if(signum == SIGINT || signum == SIGCHLD){
+		clear();
+		alarm(0);
+		pid = waitpid(-1, &status, WNOHANG);
+		retstatus = WEXITSTATUS(status);
+		if(pid == browser_pid){
+			browser_pid = NULL;
+			if(status_browser == 0){
+				status_browser = "concluído";
+			}
+			else if(status_browser == -1){
+				status_browser = "falhou";
+			}
+		}
+		else if(pid == text_pid){
+			text_pid = NULL;
+			if(status_editor == 0){
+				status_editor = "concluído";
+			}
+			else if(status_editor == -1){
+				status_editor = "falhou";
+			}
+		}
+		else if(pid == terminal_pid){
+			terminal_pid = NULL;
+			if(status_terminal == 0){
+				status_terminal = "concluído";
+			}
+			else if(status_terminal == -1){
+				status_terminal = "falhou";
+			}
+		}
+	}
+	else if(signum == SIGABRT){
+		clear();
+		alarm(0);
+		pid = waitpid(-1, &status, WNOHANG);
+		retstatus = WEXITSTATUS(status);
+		if(pid == terminal_pid){
+			terminal_pid = NULL;
+			status_browser = "abortado";
+		}
+		else if(pid == text_pid){
+			text_pid = NULL;
+			status_editor = "abortado";
+		}
+		else if(pid == browser_pid){
+			browser_pid = NULL;
+			status_terminal = "abortado";
+		}
+	}
+}
